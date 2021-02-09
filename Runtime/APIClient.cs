@@ -40,6 +40,9 @@ namespace ModIO
         /// <summary>Version information to provide in the request header.</summary>
         public static readonly string USER_AGENT_HEADER = "modioUnityPlugin-" + ModIOVersion.Current.ToString("X.Y.Z");
 
+        /// <summary>Header key for the external auth user consent value.</summary>
+        public static readonly string EXTERNAL_AUTH_CONSENT_KEY = "terms_agreed";
+
         /// <summary>Collection of the HTTP request header keys used by mod.io.</summary>
         public static readonly string[] MODIO_REQUEST_HEADER_KEYS = new string[]
         {
@@ -48,6 +51,7 @@ namespace ModIO
             "content-type",
             "x-unity-version",
             "user-agent",
+            EXTERNAL_AUTH_CONSENT_KEY,
         };
 
         // ---------[ SETTINGS ]---------
@@ -463,6 +467,66 @@ namespace ModIO
 
 
         // ---------[ AUTHENTICATION ]---------
+        /// <summary>Retrieves the terms of use to present to the user.</summary>
+        public static void GetTermsOfUse(ExternalAuthenticationProvider authProvider,
+                                         Action<TermsOfUseInfo> successCallback,
+                                         Action<WebRequestError> errorCallback)
+        {
+
+            string endpointURL = PluginSettings.API_URL + @"/authenticate/terms";
+            string authenticatorString = null;
+
+            switch(authProvider)
+            {
+                case ExternalAuthenticationProvider.Steam:
+                {
+                    authenticatorString = "service=steam";
+                }
+                break;
+                case ExternalAuthenticationProvider.GOG:
+                {
+                    authenticatorString = "service=gog";
+                }
+                break;
+                case ExternalAuthenticationProvider.ItchIO:
+                {
+                    authenticatorString = "service=itchio";
+                }
+                break;
+                case ExternalAuthenticationProvider.OculusRift:
+                {
+                    authenticatorString = "service=oculus";
+                }
+                break;
+                case ExternalAuthenticationProvider.XboxLive:
+                {
+                    authenticatorString = "service=xbox";
+                }
+                break;
+                case ExternalAuthenticationProvider.Switch:
+                {
+                    authenticatorString = "service=switch";
+                }
+                break;
+                case ExternalAuthenticationProvider.Discord:
+                {
+                    authenticatorString = "service=discord";
+                }
+                break;
+                default:
+                {
+                    authenticatorString = string.Empty;
+                }
+                break;
+            }
+
+            UnityWebRequest webRequest = APIClient.GenerateQuery(endpointURL,
+                                                                 authenticatorString,
+                                                                 null);
+
+            APIClient.SendRequest(webRequest, successCallback, errorCallback);
+        }
+
         /// <summary>Wrapper object for [[ModIO.APIClient.GetOAuthToken]] requests.</summary>
         [System.Serializable]
         #pragma warning disable 0649
@@ -471,17 +535,19 @@ namespace ModIO
 
         /// <summary>Generates the web request for a mod.io Authentication request.</summary>
         public static UnityWebRequest GenerateAuthenticationRequest(string endpointURL,
+                                                                    bool hasUserAcceptedTerms,
                                                                     string authenticationKey,
                                                                     string authenticationValue)
         {
             KeyValuePair<string, string> authData
                 = new KeyValuePair<string, string>(authenticationKey, authenticationValue);
 
-            return APIClient.GenerateAuthenticationRequest(endpointURL, authData);
+            return APIClient.GenerateAuthenticationRequest(endpointURL, hasUserAcceptedTerms, authData);
         }
 
         /// <summary>Generates the web request for a mod.io Authentication request.</summary>
         public static UnityWebRequest GenerateAuthenticationRequest(string endpointURL,
+                                                                    bool hasUserAcceptedTerms,
                                                                     params KeyValuePair<string, string>[] authData)
         {
             APIClient.AssertAuthorizationDetails(false);
@@ -494,6 +560,9 @@ namespace ModIO
             {
                 form.AddField(kvp.Key, kvp.Value);
             }
+
+            // add consent flag
+            form.AddField(APIClient.EXTERNAL_AUTH_CONSENT_KEY, hasUserAcceptedTerms.ToString());
 
             UnityWebRequest webRequest = UnityWebRequest.Post(endpointURL, form);
             webRequest.SetRequestHeader("Accept-Language", APIClient.languageCode);
@@ -510,6 +579,7 @@ namespace ModIO
             string endpointURL = PluginSettings.API_URL + @"/oauth/emailrequest";
 
             UnityWebRequest webRequest = APIClient.GenerateAuthenticationRequest(endpointURL,
+                                                                                 false,
                                                                                  "email",
                                                                                  emailAddress);
 
@@ -524,6 +594,7 @@ namespace ModIO
             string endpointURL = PluginSettings.API_URL + @"/oauth/emailexchange";
 
             UnityWebRequest webRequest = APIClient.GenerateAuthenticationRequest(endpointURL,
+                                                                                 false,
                                                                                  "security_code",
                                                                                  securityCode);
             Action<AccessTokenObject> onSuccessWrapper = (result) =>
@@ -536,6 +607,7 @@ namespace ModIO
 
         /// <summary>Request an OAuthToken using a Steam User authentication ticket.</summary>
         public static void RequestSteamAuthentication(byte[] pTicket, uint pcbTicket,
+                                                      bool hasUserAcceptedTerms,
                                                       Action<string> successCallback,
                                                       Action<WebRequestError> errorCallback)
         {
@@ -570,6 +642,7 @@ namespace ModIO
                 else
                 {
                     APIClient.RequestSteamAuthentication(encodedTicket,
+                                                         hasUserAcceptedTerms,
                                                          successCallback,
                                                          errorCallback);
                 }
@@ -578,6 +651,7 @@ namespace ModIO
 
         /// <summary>Request an OAuthToken using an encoded Steam User authentication ticket.</summary>
         public static void RequestSteamAuthentication(string base64EncodedTicket,
+                                                      bool hasUserAcceptedTerms,
                                                       Action<string> successCallback,
                                                       Action<WebRequestError> errorCallback)
         {
@@ -599,6 +673,7 @@ namespace ModIO
             string endpointURL = PluginSettings.API_URL + @"/external/steamauth";
 
             UnityWebRequest webRequest = APIClient.GenerateAuthenticationRequest(endpointURL,
+                                                                                 hasUserAcceptedTerms,
                                                                                  "appdata",
                                                                                  base64EncodedTicket);
 
@@ -613,6 +688,7 @@ namespace ModIO
 
         /// <summary>Request an OAuthToken using a GOG user authentication ticket.</summary>
         public static void RequestGOGAuthentication(byte[] data, uint dataSize,
+                                                    bool hasUserAcceptedTerms,
                                                     Action<string> successCallback,
                                                     Action<WebRequestError> errorCallback)
         {
@@ -647,6 +723,7 @@ namespace ModIO
                 else
                 {
                     APIClient.RequestGOGAuthentication(encodedTicket,
+                                                       hasUserAcceptedTerms,
                                                        successCallback,
                                                        errorCallback);
                 }
@@ -655,6 +732,7 @@ namespace ModIO
 
         /// <summary>Request an OAuthToken using a GOG Galaxy App ticket.</summary>
         public static void RequestGOGAuthentication(string base64EncodedTicket,
+                                                    bool hasUserAcceptedTerms,
                                                     Action<string> successCallback,
                                                     Action<WebRequestError> errorCallback)
         {
@@ -676,6 +754,7 @@ namespace ModIO
             string endpointURL = PluginSettings.API_URL + @"/external/galaxyauth";
 
             UnityWebRequest webRequest = APIClient.GenerateAuthenticationRequest(endpointURL,
+                                                                                 hasUserAcceptedTerms,
                                                                                  "appdata",
                                                                                  base64EncodedTicket);
 
@@ -690,6 +769,7 @@ namespace ModIO
 
         /// <summary>Request an OAuthToken using an itch.io JWT token.</summary>
         public static void RequestItchIOAuthentication(string jwtToken,
+                                                       bool hasUserAcceptedTerms,
                                                        Action<string> successCallback,
                                                        Action<WebRequestError> errorCallback)
         {
@@ -711,6 +791,7 @@ namespace ModIO
             string endpointURL = PluginSettings.API_URL + @"/external/itchioauth";
 
             UnityWebRequest webRequest = APIClient.GenerateAuthenticationRequest(endpointURL,
+                                                                                 hasUserAcceptedTerms,
                                                                                  "itchio_token",
                                                                                  jwtToken);
 
@@ -727,6 +808,7 @@ namespace ModIO
         public static void RequestOculusRiftAuthentication(string oculusUserNonce,
                                                            int oculusUserId,
                                                            string oculusUserAccessToken,
+                                                           bool hasUserAcceptedTerms,
                                                            Action<string> successCallback,
                                                            Action<WebRequestError> errorCallback)
         {
@@ -767,7 +849,9 @@ namespace ModIO
                 new KeyValuePair<string, string>("access_token",oculusUserAccessToken),
             };
 
-            UnityWebRequest webRequest = APIClient.GenerateAuthenticationRequest(endpointURL, authData);
+            UnityWebRequest webRequest = APIClient.GenerateAuthenticationRequest(endpointURL,
+                                                                                 hasUserAcceptedTerms,
+                                                                                 authData);
 
             // send request
             Action<AccessTokenObject> onSuccessWrapper = (result) =>
@@ -780,6 +864,7 @@ namespace ModIO
 
         /// <summary>Requests an OAuthToken using an Xbox signed token.</summary>
         public static void RequestXboxLiveAuthentication(string xboxLiveUserToken,
+                                                         bool hasUserAcceptedTerms,
                                                          Action<string> successCallback,
                                                          Action<WebRequestError> errorCallback)
         {
@@ -799,6 +884,7 @@ namespace ModIO
             string endpointURL = PluginSettings.API_URL + @"/external/xboxauth";
 
             UnityWebRequest webRequest = APIClient.GenerateAuthenticationRequest(endpointURL,
+                                                                                 hasUserAcceptedTerms,
                                                                                  "xbox_token",
                                                                                  xboxLiveUserToken);
 
@@ -1486,6 +1572,99 @@ namespace ModIO
                                                                       pagination);
 
             APIClient.SendRequest(webRequest, successCallback, errorCallback);
+        }
+
+        // ---------[ Obsolete ]---------
+        /// <summary>[Obsolete] Generates the web request for a mod.io Authentication request.</summary>
+        [Obsolete("Now requires the hasUserAcceptedTerms flag to be provided.")]
+        public static UnityWebRequest GenerateAuthenticationRequest(string endpointURL,
+                                                                    string authenticationKey,
+                                                                    string authenticationValue)
+        {
+            return APIClient.GenerateAuthenticationRequest(endpointURL, false,
+                                                           authenticationKey, authenticationValue);
+        }
+
+        /// <summary>[Obsolete] Generates the web request for a mod.io Authentication request.</summary>
+        [Obsolete("Now requires the hasUserAcceptedTerms flag to be provided.")]
+        public static UnityWebRequest GenerateAuthenticationRequest(string endpointURL,
+                                                                    params KeyValuePair<string, string>[] authData)
+        {
+            return APIClient.GenerateAuthenticationRequest(endpointURL, false, authData);
+        }
+
+
+        /// <summary>[Obsolete] Request an OAuthToken using a Steam User authentication ticket.</summary>
+        [Obsolete("Now requires the hasUserAcceptedTerms flag to be provided.")]
+        public static void RequestSteamAuthentication(byte[] pTicket, uint pcbTicket,
+                                                      Action<string> successCallback,
+                                                      Action<WebRequestError> errorCallback)
+        {
+            APIClient.RequestSteamAuthentication(pTicket, pcbTicket, false,
+                                                 successCallback, errorCallback);
+        }
+
+        /// <summary>[Obsolete] Request an OAuthToken using an encoded Steam User authentication ticket.</summary>
+        [Obsolete("Now requires the hasUserAcceptedTerms flag to be provided.")]
+        public static void RequestSteamAuthentication(string base64EncodedTicket,
+                                                      Action<string> successCallback,
+                                                      Action<WebRequestError> errorCallback)
+        {
+            APIClient.RequestSteamAuthentication(base64EncodedTicket, false,
+                                                 successCallback, errorCallback);
+        }
+
+        /// <summary>[Obsolete] Request an OAuthToken using a GOG user authentication ticket.</summary>
+        [Obsolete("Now requires the hasUserAcceptedTerms flag to be provided.")]
+        public static void RequestGOGAuthentication(byte[] data, uint dataSize,
+                                                    Action<string> successCallback,
+                                                    Action<WebRequestError> errorCallback)
+        {
+            APIClient.RequestGOGAuthentication(data, dataSize, false,
+                                               successCallback, errorCallback);
+        }
+
+        /// <summary>[Obsolete] Request an OAuthToken using a GOG Galaxy App ticket.</summary>
+        [Obsolete("Now requires the hasUserAcceptedTerms flag to be provided.")]
+        public static void RequestGOGAuthentication(string base64EncodedTicket,
+                                                    Action<string> successCallback,
+                                                    Action<WebRequestError> errorCallback)
+        {
+            APIClient.RequestGOGAuthentication(base64EncodedTicket, false,
+                                               successCallback, errorCallback);
+        }
+
+        /// <summary>[Obsolete]Request an OAuthToken using an itch.io JWT token.</summary>
+        [Obsolete("Now requires the hasUserAcceptedTerms flag to be provided.")]
+        public static void RequestItchIOAuthentication(string jwtToken,
+                                                       Action<string> successCallback,
+                                                       Action<WebRequestError> errorCallback)
+        {
+            APIClient.RequestItchIOAuthentication(jwtToken, false,
+                                                  successCallback, errorCallback);
+        }
+
+        /// <summary>[Obsolete] Request an OAuthToken using an Oculus Rift data.</summary>
+        [Obsolete("Now requires the hasUserAcceptedTerms flag to be provided.")]
+        public static void RequestOculusRiftAuthentication(string oculusUserNonce,
+                                                           int oculusUserId,
+                                                           string oculusUserAccessToken,
+                                                           Action<string> successCallback,
+                                                           Action<WebRequestError> errorCallback)
+        {
+            APIClient.RequestOculusRiftAuthentication(oculusUserNonce, oculusUserId, oculusUserAccessToken,
+                                                      false,
+                                                      successCallback, errorCallback);
+        }
+
+        /// <summary>[Obsolete] Requests an OAuthToken using an Xbox signed token.</summary>
+        [Obsolete("Now requires the hasUserAcceptedTerms flag to be provided.")]
+        public static void RequestXboxLiveAuthentication(string xboxLiveUserToken,
+                                                         Action<string> successCallback,
+                                                         Action<WebRequestError> errorCallback)
+        {
+            APIClient.RequestXboxLiveAuthentication(xboxLiveUserToken, false,
+                                                    successCallback, errorCallback);
         }
     }
 }
